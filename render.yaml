@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: tudogestao
+    runtime: docker
+    plan: starter
+    disk:
+      name: dados-gestao-rh
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: RH_DATA_DIR
+        value: /var/data
+      - key: RH_BOOTSTRAP_EMPTY
+        value: 'yes'
+      - key: RH_BOOTSTRAP_PASSWORD
+        sync: false
+      - key: RH_PUBLIC_ORIGINS
+        value: https://gestaorhconsultoria.com.br,https://www.gestaorhconsultoria.com.br
+      - key: RH_GMAIL_ORIGIN
+        value: https://gestaorhconsultoria.com.br

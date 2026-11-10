@@ -1,16 +1,22 @@
-const http=require('http'),fs=require('fs'),crypto=require('crypto'),path=require('path');
+const http=require('http'),fs=require('fs'),crypto=require('crypto'),path=require('path'),net=require('net');
 const identity=require('./identity.js');
 const hr=require('./hr.cjs');
 const gmail=require('./gmail-sync.cjs');
-const root=__dirname, candidatesFile=process.env.RH_CANDIDATES_FILE||path.join(root,'candidates.json');
+const root=__dirname, dataDir=process.env.RH_DATA_DIR||root, candidatesFile=process.env.RH_CANDIDATES_FILE||path.join(dataDir,'candidates.json');
 let data=JSON.parse(fs.readFileSync(candidatesFile));
-const stateFile=process.env.RH_STATE_FILE||path.join(root,'state.json');
-const authFile=process.env.RH_AUTH_FILE||path.join(root,'auth.json');
+const stateFile=process.env.RH_STATE_FILE||path.join(dataDir,'state.json');
+const authFile=process.env.RH_AUTH_FILE||path.join(dataDir,'auth.json');
+const production=process.env.NODE_ENV==='production';
+const origins=(process.env.RH_PUBLIC_ORIGINS||'').split(',').map(s=>s.trim()).filter(Boolean);
+if(process.env.RENDER_EXTERNAL_URL)origins.push(process.env.RENDER_EXTERNAL_URL);
+if(production&&!origins.length)throw Error('Configure RH_PUBLIC_ORIGINS ou RENDER_EXTERNAL_URL.');
+for(const origin of origins){const u=new URL(origin);if(u.origin!==origin||u.protocol!=='https:')throw Error('Origens públicas devem ser endereços HTTPS sem caminho.');}
 if(!fs.existsSync(authFile))throw Error('Arquivo de usuários ausente. Execute provision-users.cjs uma vez com RH_BOOTSTRAP_PASSWORD configurada.');
 const users=JSON.parse(fs.readFileSync(authFile,'utf8')).users;
 let state=fs.existsSync(stateFile)?JSON.parse(fs.readFileSync(stateFile)):{people:{},jobs:[],companies:[],roles:data.roleOptions||[]};
 const beforeMigration=JSON.stringify(state);hr.sync(state,data);if(JSON.stringify(state)!==beforeMigration){if(fs.existsSync(stateFile))fs.copyFileSync(stateFile,stateFile+'.before-companies.bak');fs.writeFileSync(stateFile,JSON.stringify(state,null,2));}
 const attempts=new Map();
+const clientIp=req=>production&&net.isIP(req.headers['cf-connecting-ip']||'')?req.headers['cf-connecting-ip']:(req.socket.remoteAddress||'local');
 const loginAttempts=new Map(),sessions=new Map(),dummySalt=crypto.randomBytes(16);
 const normalizeUser=value=>String(value||'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const passwordHash=(password,salt)=>crypto.scryptSync(password,salt,64,{N:32768,r:8,p:1,maxmem:67108864});
@@ -18,7 +24,7 @@ const sessionId=req=>(req.headers.cookie||'').split(';').map(v=>v.trim()).find(v
 const getSession=req=>{const sid=(req.headers.cookie||'').split(';').map(v=>v.trim()).find(v=>v.startsWith('rh_session='))?.slice('rh_session='.length),s=sid&&sessions.get(sid);if(!s)return null;if(s.expires<=Date.now()){sessions.delete(sid);return null;}return s;};
 const stages=['Em seleção','Entrevistado','Aprovado','2ª fase','Última fase','Reprovado','Sem interesse','Contratado'];
 let gmailUpdating=false;
-function saveState(next){fs.writeFileSync(stateFile+'.tmp',JSON.stringify(next,null,2));fs.renameSync(stateFile+'.tmp',stateFile);state=next;}
+function saveState(next){next._revision=(state._revision||0)+1;fs.writeFileSync(stateFile+'.tmp',JSON.stringify(next,null,2));fs.renameSync(stateFile+'.tmp',stateFile);state=next;}
 function findShare(key){for(const job of state.jobs){const share=(job.shares||[]).find(s=>s.token===key&&!s.revokedAt);if(share)return {job,share};}return null;}
 const server=http.createServer(async(req,res)=>{res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','no-referrer');const url=new URL(req.url,'http://localhost');const send=(status,value,type='application/json')=>{res.writeHead(status,{'Content-Type':type+'; charset=utf-8'});res.end(type==='application/json'?JSON.stringify(value):value);};
 try{
@@ -43,21 +49,22 @@ try{
   return send(200,{role:job.role,company:job.company,closed:job.closed,stages:share.stages,candidates});
  }
  if(req.method==='POST'){
-  if(req.headers.origin!==`http://${req.headers.host}`)return send(403,{error:'Origem inválida.'});
+  const requestOrigin=req.headers.origin,allowed=production?origins.includes(requestOrigin)&&new URL(requestOrigin).host===req.headers.host:requestOrigin===`http://${req.headers.host}`;
+  if(!allowed)return send(403,{error:'Origem inválida.'});
   let body='';for await(const part of req){body+=part;if(body.length>2000000)return send(413,{error:'Conteúdo muito grande.'});}const input=JSON.parse(body);
   if(url.pathname==='/api/login'){
-   const ip=req.socket.remoteAddress||'local',now=Date.now(),recent=(loginAttempts.get(ip)||[]).filter(t=>now-t<5*60*1000);if(recent.length>=15)return send(429,{error:'Muitas tentativas. Aguarde alguns minutos e tente novamente.'});loginAttempts.set(ip,[...recent,now]);
+   const ip=clientIp(req),now=Date.now(),recent=(loginAttempts.get(ip)||[]).filter(t=>now-t<5*60*1000);if(recent.length>=15)return send(429,{error:'Muitas tentativas. Aguarde alguns minutos e tente novamente.'});loginAttempts.set(ip,[...recent,now]);
    const password=typeof input.password==='string'?input.password:'';if(password.length>200)return send(401,{error:'Usuário ou senha incorretos.'});
    const username=normalizeUser(input.username),user=users.find(u=>u.key===username),salt=user?Buffer.from(user.salt,'hex'):dummySalt,expected=user?Buffer.from(user.hash,'hex'):passwordHash(password,salt),actual=passwordHash(password,salt),valid=actual.length===expected.length&&crypto.timingSafeEqual(actual,expected);
    if(!user||!valid)return send(401,{error:'Usuário ou senha incorretos.'});
-   const sid=crypto.randomBytes(32).toString('hex');sessions.set(sid,{username:user.name,expires:now+8*60*60*1000});res.setHeader('Set-Cookie',`rh_session=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800`);return send(200,{ok:true,username:user.name});
+   const sid=crypto.randomBytes(32).toString('hex');sessions.set(sid,{username:user.name,expires:now+8*60*60*1000});res.setHeader('Set-Cookie',`rh_session=${sid}; HttpOnly; SameSite=Strict; Path=/; Max-Age=28800${production?'; Secure':''}`);return send(200,{ok:true,username:user.name});
   }
   if(url.pathname==='/api/logout'){
    const sid=(req.headers.cookie||'').split(';').map(v=>v.trim()).find(v=>v.startsWith('rh_session='))?.slice('rh_session='.length);if(sid)sessions.delete(sid);res.setHeader('Set-Cookie','rh_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0');return send(200,{ok:true});
   }
   if(await hr.handle({req,url,input,admin,state,data,save:saveState,send}))return;
   if(url.pathname==='/api/consulta'){
-   const ip=req.socket.remoteAddress,now=Date.now(),recent=(attempts.get(ip)||[]).filter(t=>now-t<60000);if(recent.length>=20)return send(429,{error:'Aguarde um minuto e tente novamente.'});attempts.set(ip,[...recent,now]);
+   const ip=clientIp(req),now=Date.now(),recent=(attempts.get(ip)||[]).filter(t=>now-t<60000);if(recent.length>=20)return send(429,{error:'Aguarde um minuto e tente novamente.'});attempts.set(ip,[...recent,now]);
    const matches=identity.matches(data.candidates,state.people,input);
    if(matches.length!==1)return send(400,{error:'Dados incorretos. Confira o telefone e o primeiro nome.'});
    const c=matches[0];
@@ -66,7 +73,7 @@ try{
   }
   if(!admin)return send(401,{error:'Acesso restrito.'});
   if(url.pathname==='/api/gmail/connect'){
-   if(!/^localhost(?::\d+)?$/i.test(req.headers.host||''))return send(400,{error:'Abra o painel usando localhost para conectar o Gmail.'});
+   if(!production&&!/^localhost(?::\d+)?$/i.test(req.headers.host||''))return send(400,{error:'Abra o painel usando localhost para conectar o Gmail.'});
    try{return send(200,{url:gmail.connect(server.address().port,sessionId(req))});}catch(e){return send(400,{error:e.message});}
   }
   if(url.pathname==='/api/gmail/sync'){
@@ -93,6 +100,7 @@ try{
    return send(200,{share,path:'/Compartilhar/'+share.token});
   }
   if(url.pathname==='/api/state'){
+   if((input._revision||0)!==(state._revision||0))return send(409,{error:'Os dados foram alterados por outra pessoa. Atualize a página e tente novamente.'});
    if(!input.people||!Array.isArray(input.jobs)||!Array.isArray(input.companies)||!Array.isArray(input.roles))return send(400,{error:'Dados inválidos.'});
    input.deletedJobIds=state.deletedJobIds||[];
    input.jobs=input.jobs.filter(j=>!input.deletedJobIds.includes(j.id));
@@ -114,4 +122,4 @@ try{
  const files={'/':'admin.html','/Empresas':'admin.html','/Empresas/':'admin.html','/companies.js':'companies.js','/admin.js':'admin.js','/identity.js':'identity.js','/auth-ui.js':'auth-ui.js','/gmail-ui.js':'gmail-ui.js'};if(files[url.pathname]){let contents=fs.readFileSync(path.join(root,files[url.pathname]));if(files[url.pathname]==='admin.html'){const encoded=JSON.stringify(data).replace(/</g,'\\u003c');contents=contents.toString('utf8').replace(/(<script[^>]*id="embedded-data"[^>]*>)[\s\S]*?(<\/script>)/,(_,open,close)=>open+encoded+close).replace('</body>','<script src="/gmail-ui.js"></script></body>');}return send(200,contents,url.pathname.endsWith('.js')?'text/javascript':'text/html');}
  send(404,{error:'Página não encontrada.'});
 }catch(e){console.error(e.message);send(500,{error:'Não foi possível concluir. Tente novamente.'});}});
-server.listen(Number(process.env.PORT)||3210,'127.0.0.1',()=>{const link=`http://localhost:${server.address().port}/Login`;fs.writeFileSync(process.env.RH_ACCESS_FILE||path.join(root,'access.txt'),link);if(!process.env.RH_ACCESS_FILE)require('./link-panel.cjs')(link);console.log('Login: '+link);console.log('Consulta pública: http://localhost:'+server.address().port+'/Consulta');});
+server.listen(Number(process.env.PORT)||3210,production?'0.0.0.0':'127.0.0.1',()=>{if(production){console.log('Sistema iniciado na porta '+server.address().port);return;}const link=`http://localhost:${server.address().port}/Login`;fs.writeFileSync(process.env.RH_ACCESS_FILE||path.join(root,'access.txt'),link);if(!process.env.RH_ACCESS_FILE)require('./link-panel.cjs')(link);console.log('Login: '+link);console.log('Consulta pública: http://localhost:'+server.address().port+'/Consulta');});

@@ -1,5 +1,5 @@
 const fs=require('fs'),crypto=require('crypto'),path=require('path');
-const file=process.env.RH_AUTH_FILE||path.join(__dirname,'auth.json');
+const file=process.env.RH_AUTH_FILE||path.join(process.env.RH_DATA_DIR||__dirname,'auth.json');
 if(fs.existsSync(file))throw Error('Usuários já configurados. O arquivo existente foi mantido.');
 const password=process.env.RH_BOOTSTRAP_PASSWORD;
 if(typeof password!=='string'||password.length<12)throw Error('Defina RH_BOOTSTRAP_PASSWORD com uma senha de pelo menos 12 caracteres.');

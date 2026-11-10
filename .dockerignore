@@ -1,0 +1,10 @@
+auth.json
+candidates.json
+state.json
+*.bak
+gmail-client.json
+gmail-token.json
+tmp
+*.log
+access.txt
+.git

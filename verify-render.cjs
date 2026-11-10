@@ -1,0 +1,16 @@
+const fs=require('fs'),os=require('os'),path=require('path'),assert=require('assert/strict'),{spawn}=require('child_process');
+const dir=fs.mkdtempSync(path.join(os.tmpdir(),'rh-render-'));
+const port=3297,origin=`https://127.0.0.1:${port}`;
+const child=spawn(process.execPath,['bootstrap-render.cjs'],{cwd:__dirname,env:{...process.env,NODE_ENV:'production',RH_DATA_DIR:dir,RH_BOOTSTRAP_EMPTY:'yes',RH_BOOTSTRAP_PASSWORD:'senha-de-teste-segura',RH_PUBLIC_ORIGINS:origin,PORT:String(port)},stdio:['ignore','pipe','pipe']});
+(async()=>{try{
+ await new Promise((resolve,reject)=>{child.stdout.on('data',x=>{if(String(x).includes('Sistema iniciado'))resolve();});child.once('exit',c=>reject(Error('Servidor encerrou: '+c)));child.stderr.on('data',x=>process.stderr.write(x));});
+ const send=(url,opts={})=>fetch(`http://127.0.0.1:${port}${url}`,opts);
+ let r=await send('/api/login',{method:'POST',headers:{Origin:'https://outra.example','Content-Type':'application/json'},body:'{}'});assert.equal(r.status,403);
+ r=await send('/api/login',{method:'POST',headers:{Origin:origin,'Content-Type':'application/json'},body:JSON.stringify({username:'Marco',password:'senha-de-teste-segura'})});assert.equal(r.status,200);const cookie=r.headers.get('set-cookie');assert.match(cookie,/Secure/);
+ r=await send('/api/state',{headers:{Cookie:cookie.split(';')[0]}});assert.equal(r.status,200);const state=await r.json();
+ const headers={Cookie:cookie.split(';')[0],Origin:origin,'Content-Type':'application/json'};
+ r=await send('/api/state',{method:'POST',headers,body:JSON.stringify(state)});assert.equal(r.status,200);
+ r=await send('/api/state',{method:'POST',headers,body:JSON.stringify(state)});assert.equal(r.status,409);
+ assert(fs.existsSync(path.join(dir,'candidates.json'))&&fs.existsSync(path.join(dir,'auth.json'))&&fs.existsSync(path.join(dir,'state.json')));
+ console.log('Render: inicialização, login HTTPS, proteção de origem, dados persistentes e conflito verificados.');
+}catch(e){console.error(e);process.exitCode=1;}finally{child.kill();}})();

@@ -11,6 +11,9 @@ const child=spawn(process.execPath,['bootstrap-render.cjs'],{cwd:__dirname,env:{
  const headers={Cookie:cookie.split(';')[0],Origin:origin,'Content-Type':'application/json'};
  r=await send('/api/state',{method:'POST',headers,body:JSON.stringify(state)});assert.equal(r.status,200);
  r=await send('/api/state',{method:'POST',headers,body:JSON.stringify(state)});assert.equal(r.status,409);
+ const candidates=JSON.parse(fs.readFileSync(path.join(__dirname,'candidates.example.json'),'utf8'));candidates.candidates=[{id:'teste',name:'Pessoa de teste'}];
+ r=await send('/api/import',{method:'POST',headers,body:JSON.stringify({candidates,state})});assert.equal(r.status,200);assert.equal((await r.json()).count,1);
+ r=await send('/api/import',{method:'POST',headers,body:JSON.stringify({candidates,state})});assert.equal(r.status,409);
  assert(fs.existsSync(path.join(dir,'candidates.json'))&&fs.existsSync(path.join(dir,'auth.json'))&&fs.existsSync(path.join(dir,'state.json')));
  console.log('Render: inicialização, login HTTPS, proteção de origem, dados persistentes e conflito verificados.');
 }catch(e){console.error(e);process.exitCode=1;}finally{child.kill();}})();

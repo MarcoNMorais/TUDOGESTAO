@@ -2,7 +2,7 @@
 
 O serviço usa Docker e um disco persistente montado em `/var/data`. O plano Starter e o disco de 1 GB geram cobrança. Use apenas uma instância, pois os dados e as sessões são locais a ela. Alterações no disco não são preservadas se o disco for removido. Mantenha cópias privadas dos arquivos de dados.
 
-O repositório público contém somente uma base vazia. A instalação inicial cria o banco vazio e quatro usuários usando `RH_BOOTSTRAP_PASSWORD`. Nunca coloque senhas, currículos, candidatos ou credenciais no GitHub. Antes de abrir o sistema para uso, transfira os arquivos `candidates.json`, `state.json` e `auth.json` locais para `/var/data` por SSH/SCP em conexão autenticada e reinicie o serviço; confirme a contagem de candidatos. Não sobrescreva dados de produção que já tenham sido atualizados.
+O repositório público contém somente uma base vazia. A instalação inicial cria o banco vazio e quatro usuários usando `RH_BOOTSTRAP_PASSWORD`. Nunca coloque senhas, currículos, candidatos ou credenciais no GitHub. Antes de abrir o sistema para uso, entre na conta administrativa e abra `/Importar` para importar os arquivos privados `candidates.json` e `state.json`; confira a contagem. A importação só funciona enquanto a base inicial está vazia. Os usuários usam a senha definida no Render.
 
 Após a migração, remova `RH_BOOTSTRAP_EMPTY` e `RH_BOOTSTRAP_PASSWORD` do ambiente. Não altere os registros DNS até o serviço novo estar testado. No Render, associe o domínio, atualize apenas os registros de site necessários no provedor DNS e valide o certificado. Preserve registros de e-mail (MX, SPF, DKIM e outros). O serviço anterior pode ser suspenso depois que a troca estiver conferida.
 

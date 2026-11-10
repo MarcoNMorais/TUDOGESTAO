@@ -51,7 +51,7 @@ try{
  if(req.method==='POST'){
   const requestOrigin=req.headers.origin,allowed=production?origins.includes(requestOrigin)&&new URL(requestOrigin).host===req.headers.host:requestOrigin===`http://${req.headers.host}`;
   if(!allowed)return send(403,{error:'Origem inválida.'});
-  let body='';for await(const part of req){body+=part;if(body.length>2000000)return send(413,{error:'Conteúdo muito grande.'});}const input=JSON.parse(body);
+  let body='';const limit=url.pathname==='/api/import'&&admin?35000000:2000000;for await(const part of req){body+=part;if(body.length>limit)return send(413,{error:'Conteúdo muito grande.'});}const input=JSON.parse(body);
   if(url.pathname==='/api/login'){
    const ip=clientIp(req),now=Date.now(),recent=(loginAttempts.get(ip)||[]).filter(t=>now-t<5*60*1000);if(recent.length>=15)return send(429,{error:'Muitas tentativas. Aguarde alguns minutos e tente novamente.'});loginAttempts.set(ip,[...recent,now]);
    const password=typeof input.password==='string'?input.password:'';if(password.length>200)return send(401,{error:'Usuário ou senha incorretos.'});
@@ -72,6 +72,18 @@ try{
    return send(200,{name:c.name,city:c.city,jobs});
   }
   if(!admin)return send(401,{error:'Acesso restrito.'});
+  if(url.pathname==='/api/import'){
+   if(!production||process.env.RH_BOOTSTRAP_EMPTY!=='yes'||data.candidates.length||state.jobs.length||state.companies.length||state.hires.length||state.evaluations.length)return send(409,{error:'A importação só está disponível na instalação inicial vazia.'});
+   const imported=input.candidates, importedState=input.state;
+   if(!imported||!Array.isArray(imported.candidates)||!imported.candidates.length||!Array.isArray(imported.roleOptions)||!imported.stats||imported.candidates.some(c=>!c||typeof c.id!=='string'||typeof c.name!=='string')||new Set(imported.candidates.map(c=>c.id)).size!==imported.candidates.length)return send(400,{error:'Arquivo de candidatos inválido.'});
+   if(!importedState||typeof importedState.people!=='object'||!Array.isArray(importedState.jobs)||!Array.isArray(importedState.companies)||!Array.isArray(importedState.roles))return send(400,{error:'Arquivo de histórico inválido.'});
+   const next=structuredClone(importedState);hr.sync(next,imported);next._revision=0;
+   const tempCandidates=candidatesFile+'.import.tmp',tempState=stateFile+'.import.tmp';
+   fs.writeFileSync(tempCandidates,JSON.stringify(imported),{mode:0o600});fs.writeFileSync(tempState,JSON.stringify(next,null,2),{mode:0o600});
+   fs.copyFileSync(candidatesFile,candidatesFile+'.before-import.bak');if(fs.existsSync(stateFile))fs.copyFileSync(stateFile,stateFile+'.before-import.bak');
+   fs.renameSync(tempCandidates,candidatesFile);try{fs.renameSync(tempState,stateFile);}catch(e){fs.copyFileSync(candidatesFile+'.before-import.bak',candidatesFile);throw e;}
+   data=imported;state=next;return send(200,{ok:true,count:data.candidates.length});
+  }
   if(url.pathname==='/api/gmail/connect'){
    if(!production&&!/^localhost(?::\d+)?$/i.test(req.headers.host||''))return send(400,{error:'Abra o painel usando localhost para conectar o Gmail.'});
    try{return send(200,{url:gmail.connect(server.address().port,sessionId(req))});}catch(e){return send(400,{error:e.message});}
@@ -116,6 +128,7 @@ try{
   }
  }
  if(!admin){res.writeHead(302,{Location:'/Login?next='+encodeURIComponent(url.pathname)});return res.end();}
+ if(url.pathname==='/Importar'&&req.method==='GET')return send(200,fs.readFileSync(path.join(root,'importar.html')),'text/html');
  if(url.pathname==='/api/gmail/status')return send(200,{connected:gmail.connected(),lastUpdated:data.lastGmailSync||null,updating:gmailUpdating});
  if(url.pathname==='/Modelo-Avaliacao.pdf'){res.writeHead(200,{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="Avaliacao_Experiencia_Gestao_RH.pdf"'});return res.end(fs.readFileSync(path.join(root,'output/pdf/Avaliacao_Experiencia_Gestao_RH.pdf')));}
  if(url.pathname==='/api/state')return send(200,state);

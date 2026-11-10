@@ -1,0 +1,22 @@
+{
+ "version":1,
+ "title":"Avaliação de experiência",
+ "scale":["Abaixo do esperado","Atinge parcialmente o esperado","Atinge o esperado","Acima do esperado"],
+ "questions":[
+  {"id":"normas","group":"Desempenho funcional","title":"Entendimento das normas","text":"Busca conhecer e aplica as normas e os critérios necessários à execução das suas tarefas?"},
+  {"id":"processos","group":"Desempenho funcional","title":"Entendimento dos processos","text":"Compreende os processos de trabalho, esclarece dúvidas e sugere melhorias quando necessário?"},
+  {"id":"tecnica","group":"Desempenho funcional","title":"Capacidade técnica","text":"Aplica os conhecimentos técnicos necessários às rotinas da função?"},
+  {"id":"aprendizagem","group":"Desempenho funcional","title":"Capacidade de aprendizagem","text":"Assimila orientações e demonstra facilidade e flexibilidade para aprender?"},
+  {"id":"iniciativa","group":"Desempenho funcional","title":"Energia, disposição e iniciativa","text":"Demonstra interesse, entusiasmo, determinação e iniciativa na realização das atividades?"},
+  {"id":"assiduidade","group":"Desempenho funcional","title":"Pontualidade e assiduidade","text":"Cumpre os horários e a frequência de trabalho estabelecidos?"},
+  {"id":"clientes","group":"Atitudes e relacionamento","title":"Relacionamento com clientes","text":"Trata clientes internos e externos com respeito, educação, paciência e cordialidade?"},
+  {"id":"adaptacao","group":"Atitudes e relacionamento","title":"Flexibilidade e adaptabilidade","text":"Adapta-se a novos métodos, procedimentos e ferramentas conforme as necessidades do trabalho?"},
+  {"id":"relacionamento","group":"Atitudes e relacionamento","title":"Relacionamento interpessoal","text":"Relaciona-se de forma respeitosa e assertiva com colegas, lideranças, subordinados e fornecedores?"},
+  {"id":"comunicacao","group":"Atitudes e relacionamento","title":"Comunicação escrita e falada","text":"Expressa-se de forma clara e adequada, tanto na comunicação oral quanto na escrita?"},
+  {"id":"cuidados","group":"Atitudes e relacionamento","title":"Cuidados pessoais e apresentação profissional","text":"Mantém os cuidados de higiene, apresentação e vestimenta compatíveis com a função e com as orientações do ambiente de trabalho?"},
+  {"id":"criatividade","group":"Atitudes e relacionamento","title":"Criatividade","text":"Propõe ideias, alternativas e soluções para melhorar o trabalho?"}
+ ],
+ "trainingTypes":["Interno","Externo","Não necessário no momento"],
+ "trainingModes":["Informática","Comportamental","Técnico / operacional"],
+ "recommendations":["Efetivação do colaborador","Dispensa do colaborador","Acompanhar desenvolvimento"]
+}

@@ -1,0 +1,5 @@
+const fs=require('fs'),path=require('path'),{spawn}=require('child_process');
+process.chdir(__dirname);
+function openPanel(){const url=fs.readFileSync(path.join(__dirname,'access.txt'),'utf8').trim();if(url!=='http://localhost:3210/Login')throw Error('Endereço do painel inválido.');const browser=spawn('explorer.exe',[url],{detached:true,stdio:'ignore',windowsHide:true});browser.unref();console.log('Entre com um dos usuários autorizados. Mantenha a janela do servidor aberta durante o uso.');}
+(async()=>{try{const r=await fetch('http://localhost:3210/Login',{signal:AbortSignal.timeout(2000)});if(r.ok){openPanel();return;}}catch{}
+const child=spawn(process.execPath,['server.cjs'],{cwd:__dirname,stdio:['inherit','pipe','inherit'],windowsHide:true});let opened=false;child.stdout.on('data',chunk=>{process.stdout.write(chunk);if(!opened&&chunk.toString().includes('Painel:')){opened=true;openPanel();}});child.on('exit',code=>{process.exitCode=code||0;});child.on('error',e=>{console.error(e.message);process.exitCode=1;});})();

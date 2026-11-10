@@ -1,0 +1,11 @@
+const fs=require('fs');
+let html=fs.readFileSync('base.html','utf8');
+const match=html.match(/<script[^>]*id="embedded-data"[^>]*>([\s\S]*?)<\/script>/);
+fs.writeFileSync('candidates.json',match[1]);
+console.log('Candidates:',JSON.parse(match[1]).candidates.length);
+console.log(html.match(/<thead>[\s\S]*?<\/thead>/)?.[0]);
+html=html.replace('init();\n','init();\n');
+html=html.replace('</body>','<script src="/admin.js"></script></body>');
+fs.writeFileSync('admin.html',html);
+require('./apply-branding.cjs');
+if(fs.existsSync('access.txt'))require('./link-panel.cjs')(fs.readFileSync('access.txt','utf8').trim());

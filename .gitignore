@@ -1,0 +1,12 @@
+auth.json
+gmail-client.json
+gmail-token.json
+candidates.json
+candidates.json.*
+state.json
+state.json.*
+*.before-sync.bak
+*.tmp
+access.txt
+*.log
+node_modules/

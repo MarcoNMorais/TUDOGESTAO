@@ -72,6 +72,13 @@ try{
    return send(200,{name:c.name,city:c.city,jobs});
   }
   if(!admin)return send(401,{error:'Acesso restrito.'});
+  if(url.pathname==='/api/gmail/setup'){
+   const client=input?.web,origin=process.env.RH_GMAIL_ORIGIN;
+   if(!production||!origin||!client||typeof client.client_id!=='string'||typeof client.client_secret!=='string'||!Array.isArray(client.redirect_uris)||!client.redirect_uris.includes(origin+'/oauth/gmail/callback'))return send(400,{error:'Credencial inválida. Use o arquivo do aplicativo Web com o endereço de retorno do site.'});
+   const file=process.env.RH_GMAIL_CLIENT_FILE||path.join(dataDir,'gmail-client.json'),token=process.env.RH_GMAIL_TOKEN_FILE||path.join(dataDir,'gmail-token.json');
+   if(fs.existsSync(file)||fs.existsSync(token))return send(409,{error:'Já existe uma credencial ou conexão Gmail. A configuração existente foi preservada.'});
+   fs.writeFileSync(file,JSON.stringify(input),{flag:'wx',mode:0o600});return send(200,{ok:true});
+  }
   if(url.pathname==='/api/import'){
    if(!production||process.env.RH_BOOTSTRAP_EMPTY!=='yes'||data.candidates.length||state.jobs.length||state.companies.length||state.hires.length||state.evaluations.length)return send(409,{error:'A importação só está disponível na instalação inicial vazia.'});
    const imported=input.candidates, importedState=input.state;
@@ -129,6 +136,7 @@ try{
  }
  if(!admin){res.writeHead(302,{Location:'/Login?next='+encodeURIComponent(url.pathname)});return res.end();}
  if(url.pathname==='/Importar'&&req.method==='GET')return send(200,fs.readFileSync(path.join(root,'importar.html')),'text/html');
+ if(url.pathname==='/Configurar-Gmail'&&req.method==='GET')return send(200,fs.readFileSync(path.join(root,'configurar-gmail.html')),'text/html');
  if(url.pathname==='/api/gmail/status')return send(200,{connected:gmail.connected(),lastUpdated:data.lastGmailSync||null,updating:gmailUpdating});
  if(url.pathname==='/Modelo-Avaliacao.pdf'){res.writeHead(200,{'Content-Type':'application/pdf','Content-Disposition':'inline; filename="Avaliacao_Experiencia_Gestao_RH.pdf"'});return res.end(fs.readFileSync(path.join(root,'output/pdf/Avaliacao_Experiencia_Gestao_RH.pdf')));}
  if(url.pathname==='/api/state')return send(200,state);
